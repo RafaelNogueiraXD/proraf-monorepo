@@ -1,0 +1,92 @@
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./proraf-backend
+      dockerfile: Dockerfile
+    container_name: proraf-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=sqlite:///./proraf.db
+      - CORS_ORIGINS=http://localhost,http://localhost:3000,http://localhost:80
+    volumes:
+      - backend-data:/app/data
+      - backend-images:/app/static/images
+    restart: unless-stopped
+    networks:
+      - proraf-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend React/Vite
+  frontend:
+    build:
+      context: ./proraf-agro-trace
+      dockerfile: Dockerfile
+    container_name: proraf-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - proraf-network
+
+  # Backend Development (opcional)
+  backend-dev:
+    build:
+      context: ./proraf-backend
+      dockerfile: Dockerfile.dev
+    container_name: proraf-backend-dev
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./proraf-backend:/app
+      - /app/.venv
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=sqlite:///./proraf.db
+      - CORS_ORIGINS=http://localhost,http://localhost:3000,http://localhost:8080
+    networks:
+      - proraf-network
+    profiles:
+      - development
+
+  # Frontend Development (opcional)
+  frontend-dev:
+    build:
+      context: ./proraf-agro-trace
+      dockerfile: Dockerfile
+      target: builder
+    container_name: proraf-frontend-dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./proraf-agro-trace:/app
+      - /app/node_modules
+    command: bun run dev
+    environment:
+      - VITE_API_URL=http://localhost:8001
+    networks:
+      - proraf-network
+    profiles:
+      - development
+
+networks:
+  proraf-network:
+    driver: bridge
+    name: proraf-network
+
+volumes:
+  backend-data:
+    driver: local
+    name: proraf-backend-data
+  backend-images:
+    driver: local
+    name: proraf-backend-images
